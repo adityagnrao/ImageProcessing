@@ -1,0 +1,254 @@
+
+
+/*this code snippet 
+ * 1)reads an RGB Image from the file specified as parameter 1, 
+ * 2)Converts to YUV space
+ * 3)Subsamples the Image along x-axis based on Y,V,U sampling specified as parameters 2,3,and 4 respectively
+ * 4)Upsamples using Linear Interpolation
+ * 5)Converts it back to RGB 
+ * 6)Perform Channel Quantization based on the input specified as the parameter 5
+ * 7)and Display the Original Image on the left and the  Result on the right side. 
+ */
+import java.awt.*;
+import java.awt.image.*;
+import java.io.*;
+import javax.swing.*;
+
+
+public class imageSampling {
+
+  
+   public static void main(String[] args) {
+   	
+//Width and Height hardcoded as directed by the TA
+	
+   	int width = 352; 
+	int height = 288;
+	int y_sample=Integer.parseInt(args[1]);
+	int u_sample=Integer.parseInt(args[2]);
+	int v_sample=Integer.parseInt(args[3]);
+	int Q=Integer.parseInt(args[4]);
+    BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+    BufferedImage img2 = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+    try {
+	    File file = new File(args[0]);
+	    InputStream is = new FileInputStream(file);
+
+	    long len = file.length();
+	    byte[] bytes = new byte[(int)len];
+	    
+	    
+//	    changing input from 0 to 1 for Y, U, and V if specified as 0
+	    if(y_sample==0 || u_sample==0 || v_sample == 0 || Q==0)
+	    {
+	    	System.out.println("Taking input as 1 for 0");
+	    	if(y_sample==0)
+	    	{
+	    		y_sample=1;
+	    	}
+	    	if(u_sample==0)
+	    	{
+	    		u_sample=1;
+	    	}
+	    	if(v_sample==0)
+	    	{
+	    		v_sample=1;
+	    	}
+	    	if(Q==0)
+	    	{
+	    		System.out.println("Qcannot be 0, taking Q=256 as default");
+	    		Q=256;
+	    	}
+	    }
+	    
+	    Integer[] yuv=new Integer[width*height*4];
+	    for(int k=0; k<yuv.length;k++)
+	    {
+	    	yuv[k]=0;
+	    }
+	    
+	    int offset = 0;
+        int numRead = 0;
+        
+//        Finding the number of bits required to represent r g b based on the Q value
+        Integer no_of_bits=(int)Math.round(Math.log10(Q)/Math.log10(2));
+        Integer q= (8-no_of_bits);
+//        System.out.println(q);
+        q= (int) Math.pow(2, q);
+        System.out.println("no of bits per color channel  "+no_of_bits);
+       
+//        
+        while (offset < bytes.length && (numRead=is.read(bytes, offset, bytes.length-offset)) >= 0) {
+            offset += numRead;
+        }
+        is.close();
+        
+    				
+    	int ind = 0;
+		Integer lu,lv;
+		
+		for(int y = 0; y < height; y++){
+	
+			for(int x = 0; x < width; x++){
+				lu=ind+width*height;
+				lv=ind+width*height*2;
+//				byte a = 0;
+				byte r = bytes[ind];
+				byte g = bytes[lu];
+				byte b = bytes[lv]; 
+				
+				if(ind%y_sample==0){
+				Integer Y =( (r & 0xff) *(299)+(g  & 0xff)*(587)+(b  & 0xff)*(114))/1000;
+					
+				yuv[ind]=Y;
+				}else {yuv[ind]=-1;}
+				
+				
+				if(ind%u_sample==0){
+					Integer U =( (r  & 0xff)*(-147)+(g  & 0xff)*(-289)+(b  & 0xff)*(436))/1000;
+					yuv[lu]=U;
+
+				}else {yuv[lu]=-1;}
+				
+				
+				if(ind%v_sample==0){
+				Integer V =( (r  & 0xff)*(615)+(g  & 0xff)*(-515)+(b  & 0xff)*(-100))/1000;
+				yuv[lv]=V;
+				}else {yuv[lv]=-1;}
+				
+				
+				
+				int pix = 0xff000000 | ((r & 0xff) << 16) | ((g & 0xff) << 8) | (b & 0xff);
+				img.setRGB(x,y,pix);
+				ind++;
+			}
+		}
+		
+	//Up-Sampling
+			ind=0;	
+			
+		for(int y = 0; y < height; y++){
+			
+			for(int x = 0; x < width; x++){
+				lu=ind+width*height;
+				lv=ind+width*height*2;
+
+				if(ind<(height*width))
+               {
+				if(ind%y_sample!=0){
+
+					
+//					liner interpolation
+					yuv[ind]=yuv[ind-(ind%y_sample)]+((yuv[ind+y_sample-(ind%y_sample)]-yuv[ind-(ind%y_sample)])/y_sample)*(ind%(y_sample));
+					System.out.print(yuv[ind]+" ");
+				}
+				if(ind%u_sample!=0){
+
+					
+//					liner interpolation
+					yuv[lu]=yuv[lu-(lu%u_sample)]+((yuv[lu+u_sample-(lu%u_sample)]-yuv[lu-(lu%u_sample)])/u_sample)*(ind%u_sample);
+
+				}
+				if(ind%v_sample!=0){
+
+				
+//					liner interpolation
+					yuv[lv]=yuv[lv-(lv%v_sample)]+((yuv[lv+v_sample-(lv%v_sample)]-yuv[lv-(lv%v_sample)])/v_sample)*(ind%v_sample);
+				}
+				
+               }
+
+				
+				Integer r1 = (yuv[ind]*(999)+yuv[lu]*(0000)+yuv[lv]*(1140))/1000;
+				Integer g1 = (yuv[ind]*(1000)+yuv[lu]*(-395)+yuv[lv]*(-581))/1000;
+				Integer b1 = (yuv[ind]*(1000)+yuv[lu]*(2032)+yuv[lv]*(-0000))/1000;
+				
+				
+				byte rb= (byte)Integer.parseInt(Integer.toString(Math.abs(r1)));
+				byte gb= (byte)Integer.parseInt(Integer.toString(Math.abs(g1)));
+				byte bb= (byte)Integer.parseInt(Integer.toString(Math.abs(b1)));
+				
+				
+				//int pix = ((a << 24) + (rb << 16) + (gb << 8) + bb);
+				
+				
+
+				//applying quantization
+	
+				if((rb & 0xFF)%q!=0)
+				{
+					double mid=Math.round(((rb+(rb%q))+(rb-(rb%q)))/2);
+					if(rb-(rb%q)<mid)
+					{
+					rb=(byte) (rb-(rb%q));
+					}
+					else
+					{
+						rb=(byte)(rb+(rb%q));
+					}
+				}
+				if((gb & 0xFF)%q!=0)
+				{
+					double mid=Math.round(((gb+(gb%q))+(gb-(gb%q)))/2);
+					if(gb-(gb%q)<mid)
+					{
+					gb=(byte) (gb-(gb%q));
+					}
+					else
+					{
+						gb=(byte)(gb+(gb%q));
+					}
+				}
+				if((bb & 0xFF)%q!=0)
+				{
+					double mid=Math.round(((bb+(bb%q))+(bb-(bb%q)))/2);
+					if(bb-(bb%q)<mid)
+					{
+					bb=(byte) (bb-(bb%q));
+					}
+					else
+					{
+						bb=(byte)(bb+(bb%q));
+					}
+				}
+				int pix2 = 0xff000000 | (rb & 0xFF) << 16 | (gb & 0xFF) << 8 | bb & 0xFF;
+				img2.setRGB(x,y,pix2);
+				ind++;
+			}
+		}
+		
+		
+		
+    } catch (FileNotFoundException e) {
+      e.printStackTrace();
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+    
+    // Use a label to display the image
+    JFrame frame = new JFrame();
+   
+    JPanel subPanel1 = new JPanel();
+    subPanel1.setPreferredSize (new Dimension(width, height));
+    subPanel1.setBackground (Color.gray);
+   
+   JLabel label1= new JLabel("",new ImageIcon(img),SwingConstants.CENTER);
+
+   JLabel label2 = new JLabel("",new ImageIcon(img2),SwingConstants.LEFT);
+
+   subPanel1.add (label1);
+
+   subPanel1.add (label2);
+   
+
+
+   frame.setSize(width*4, height*4);
+   
+    frame.setVisible(true);
+    frame.add(subPanel1);
+   
+   }
+   
+   
+  
+}
